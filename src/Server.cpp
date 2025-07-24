@@ -3,10 +3,29 @@
 #include <string>
 #include <cstring>
 #include <unistd.h>
+#include <unistd.h>
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <arpa/inet.h>
 #include <netdb.h>
+
+
+/*
+#ifdef _WIN32
+#include <io.h>
+#else
+#include <unistd.h>
+#endif
+#ifdef _WIN32
+#include <winsock2.h>
+#include <ws2tcpip.h>
+#pragma comment(lib, "ws2_32.lib")
+#else
+#include <sys/types.h>
+#include <sys/socket.h>
+#include <arpa/inet.h>
+#include <netdb.h>
+#endif */
 
 int main(int argc, char **argv) {
   // Flush after every std::cout / std::cerr
@@ -27,6 +46,7 @@ int main(int argc, char **argv) {
     std::cerr << "setsockopt failed\n";
     return 1;
   }
+  
   
   struct sockaddr_in server_addr;
   server_addr.sin_family = AF_INET;
@@ -52,15 +72,36 @@ int main(int argc, char **argv) {
   std::cout << "Logs from your program will appear here!\n";
 
   // Uncomment this block to pass the first stage
-  // 
+  // Accept a client connection
   int client_fd = accept(server_fd, (struct sockaddr *) &client_addr, (socklen_t *) &client_addr_len);
   std::cout << "Client connected\n";
 
   //once client connects send ping response
-  std::string response = "+PONG\r\n";
-  send(client_fd, response.c_str(), response.size(), 0);
+  //std::string response = "+PONG\r\n";
+  //send(client_fd, response.c_str(), response.size(), 0);
 
-  close(client_fd);
+  //allow client to send multiple pings
+  char buffer[1024];
+
+  //while reading user bytes
+  while (true) {
+    int bytes_read = read(client_fd, buffer, sizeof(buffer));
+
+    if (bytes_read < 0) {
+      std::cerr << "failed to read bytes by user\n";
+      return 1;
+    }
+
+    //user request
+    std::string request(buffer);
+    if (request.find("PING") != std::string::npos) { //note to self: if not find .find returns string::npos
+      std::string response = "+PONG\r\n";
+      send(client_fd, response.c_str(), response.size(), 0);
+    }
+  }
+
+
+  //close(client_fd);
   close(server_fd);
 
   return 0;
