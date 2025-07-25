@@ -11,7 +11,10 @@
 #include <vector>
 #include <algorithm>
 #include <poll.h>
+#include <unordered_map>
+#include <functional>
 
+#include "RESP_Parser.h"
 /*
 #ifdef _WIN32
 #include <io.h>
@@ -28,6 +31,22 @@
 #include <arpa/inet.h>
 #include <netdb.h>
 #endif */
+
+//Command handlers:
+void handle_ping(const std::vector<std::string> & cmd, int fd) {
+  std::string response = "+PONG\r\n";
+  send(fd, response.c_str(), response.size(), 0);
+}
+
+void handle_echo(const std::vector<std::string>& cmd, int fd) {
+
+}
+
+std::unordered_map<std::string, std::function<void(const std::vector<std::string>&, int)>> command_table = {
+  {"PING", handle_ping},
+  {"ECHO", handle_echo}
+};
+
 
 int main(int argc, char **argv) {
   // Flush after every std::cout / std::cerr
@@ -85,6 +104,7 @@ int main(int argc, char **argv) {
     short revents;   // Events returned (set by poll())
 }; */
   
+
   poll_fds.push_back({server_fd, POLLIN, 0});
   while (true) {
     //checking (polling) for new activity
@@ -103,7 +123,6 @@ int main(int argc, char **argv) {
 
     //loop through file decriptors and find ones where clients sent data
     for (int i = 1; i < poll_fds.size(); i++) {
-      std::cout << "Client number: " << i << "\n";
       char buffer[2048];
       if (poll_fds[i].revents & POLLIN) { 
         int bytes_read = read(poll_fds[i].fd, buffer, sizeof(buffer));
@@ -112,8 +131,23 @@ int main(int argc, char **argv) {
          std::cerr << "failed to read bytes by user\n";
          close(poll_fds[i].fd);
          poll_fds.erase(poll_fds.begin() + i);
-        } else {
+        } else {   
+        
+        //handle client ocmmands
         std::string request(buffer);
+        RESP_Parser parser;
+        std::vector<std::string> command = parser.parse(request); //note: impliment parse
+        //handle_command(command, poll_fds[i].fd); //handle the command
+        auto it = command_table.find(command[0]);
+        if (it != command_table.end()) {
+          it->second(command, poll_fds[i].fd);
+        } else {
+            // handle unknown command
+            std::string response = "-ERR unknown command\r\n";
+            send(poll_fds[i].fd, response.c_str(), response.size(), 0);
+        }
+
+
         if (request.find("PING") != std::string::npos) { //note to self: if not find .find returns string::npos
           std::string response = "+PONG\r\n";
           send(poll_fds[i].fd, response.c_str(), response.size(), 0);
@@ -122,50 +156,10 @@ int main(int argc, char **argv) {
       } 
     }
   } 
-
-  
-
-
-
-  /*
-  // Uncomment this block to pass the first stage
-  // Accept a client connection
-  int client_fd = accept(server_fd, (struct sockaddr *) &client_addr, (socklen_t *) &client_addr_len);
-  std::cout << "Client connected\n";
-
-  //once client connects send ping response
-  //std::string response = "+PONG\r\n";
-  //send(client_fd, response.c_str(), response.size(), 0);
-
-  //allow client to send multiple pings
-  char buffer[1024];
-
-  //while reading user bytes
-  while (true) {
-    int bytes_read = read(client_fd, buffer, sizeof(buffer));
-
-    if (bytes_read < 0) {
-      std::cerr << "failed to read bytes by user\n";
-      return 1;
-    }
-
-    //user request
-    std::string request(buffer);
-    if (request.find("PING") != std::string::npos) { //note to self: if not find .find returns string::npos
-      std::string response = "+PONG\r\n";
-      send(client_fd, response.c_str(), response.size(), 0);
-    }
-  }
-
-
-  //close(client_fd); */
-
-  /* 
-  //cleanup file descriptors (ie close clients)
-  for (int i = 1; i < poll_fds.size(); i++) {
-    close(poll_fds[i].fd);
-  } */
   close(server_fd); 
 
   return 0;
 }
+
+
+
