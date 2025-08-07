@@ -117,7 +117,11 @@ int main(int argc, char **argv) {
         int bytes_read = read(poll_fds[i].fd, buffer, sizeof(buffer));
 
         if (bytes_read <= 0) {
-         std::cerr << "failed to read bytes by user\n";
+          if (bytes_read == 0) {
+            std::cerr << "client disconnected\n";
+          } else {
+            std::cerr << "failed to read bytes by user\n";
+          }
          close(poll_fds[i].fd);
          poll_fds.erase(poll_fds.begin() + i);
         } else {  
