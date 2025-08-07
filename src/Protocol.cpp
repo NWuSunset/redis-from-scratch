@@ -25,8 +25,8 @@ void Protocol::handle_echo(const std::vector<std::string>& cmd, int fd) {
   }
 
   const std::string& arg = cmd[1];
-  std::string result = "$" + std::to_string(arg.length()) + "\r\n" + arg + "\r\n";
-  
+  std::string response = "$" + std::to_string(arg.length()) + "\r\n" + arg + "\r\n";
+  send(fd, response.c_str(), response.size(), 0);
 }
 
 //sets a key to a value (like a map) ex: SET foo bar, where 'foo' is the key to value 'bar'
