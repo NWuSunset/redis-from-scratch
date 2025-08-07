@@ -125,18 +125,13 @@ int main(int argc, char **argv) {
         std::string request(buffer);
         std::vector<std::string> command = protocol.parse(request); //note: impliment parse (will return a parsed command which is an array of bulk strings encoded with the redis protocol)
         protocol.executeCommand(command, poll_fds[i]);
-
-        /*
-        if (request.find("PING") != std::string::npos) { //note to self: if not find .find returns string::npos
-          std::string response = "+PONG\r\n";
-          send(poll_fds[i].fd, response.c_str(), response.size(), 0);
-        }*/
        }
       } 
     }
   } 
-  close(server_fd); 
 
+  close(server_fd); 
+    
   return 0;
 }
 

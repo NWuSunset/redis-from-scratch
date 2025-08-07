@@ -2,16 +2,22 @@
 
 Protocol::Protocol()
 {
+    command_table = {
+        {"PING", [this](const std::vector<std::string>& cmd, int fd) { handle_ping(cmd, fd); }},
+        {"ECHO", [this](const std::vector<std::string>& cmd, int fd) { handle_echo(cmd, fd); }},
+        {"SET",  [this](const std::vector<std::string>& cmd, int fd) { handle_set(cmd, fd); }},
+        {"GET",  [this](const std::vector<std::string>& cmd, int fd) { handle_get(cmd, fd); }}
+    };
 }
 
 //Command handlers:
-void handle_ping(const std::vector<std::string> & cmd, int fd) {
+void Protocol::handle_ping(const std::vector<std::string> & cmd, int fd) {
   std::string response = "+PONG\r\n";
   send(fd, response.c_str(), response.size(), 0);
 }
 
 //respondes with the arg as a RESP encoded bulk string (ex: 'ECHO hey' --> server returns '$3\r\nhey\r\n')
-void handle_echo(const std::vector<std::string>& cmd, int fd) {
+void Protocol::handle_echo(const std::vector<std::string>& cmd, int fd) {
   if (cmd.size() < 2) {
     std::string response = "-ERR wrong number of arguments for 'echo' command\r\n";
     send(fd, response.c_str(), response.size(), 0);
@@ -20,15 +26,38 @@ void handle_echo(const std::vector<std::string>& cmd, int fd) {
 
   const std::string& arg = cmd[1];
   std::string result = "$" + std::to_string(arg.length()) + "\r\n" + arg + "\r\n";
-  send(fd, result.c_str(), result.size(), 0);
+  
 }
 
-//current list of function names (fix to work with parsed commands) 
-std::unordered_map<std::string, std::function<void(const std::vector<std::string>&, int)>> command_table = {
-  {"PING", handle_ping}, 
-  {"ECHO", handle_echo}
-};
+//sets a key to a value (like a map) ex: SET foo bar, where 'foo' is the key to value 'bar'
+void Protocol::handle_set(const std::vector<std::string>& cmd, int fd) {
+    if (cmd.size() < 3) {
+        std::string response = "-ERR wrong number of arguments for 'set' command\r\n";
+        send(fd, response.c_str(), response.size(), 0);
+        return;
+    }
+    kv_store[cmd[1]] = cmd[2]; //link the key to the value
+    std::string response = "+OK\r\n";
+    send(fd, response.c_str(), response.size(), 0);
+}
 
+//get the referenced key
+void Protocol::handle_get(const std::vector<std::string>& cmd, int fd) {
+    if (cmd.size() < 2) {
+         std::string response = "-ERR wrong number of arguments for 'set' command\r\n";
+         send(fd, response.c_str(), response.size(), 0);
+         return;
+    }
+    auto it = kv_store.find(cmd[1]);
+    if (it != kv_store.end()) {
+        std::string value = it->second;
+        std::string response = "$" + std::to_string(value.length()) + "\r\n" + value + "\r\n";
+        send(fd, response.c_str(), response.size(), 0);
+    } else {
+        std::string response = "$-1\r\n"; //return a null bulk string
+        send(fd, response.c_str(), response.size(), 0); 
+    }
+}
 
  //Takes bytes encoded by RESP from client and parses the bytes to extract the comamnds + args (note: client sends as array of bulk strings, each with the RESP encryption applied)
 std::vector<std::string> Protocol::parse(std::string input) {
@@ -76,7 +105,12 @@ void Protocol::executeCommand(std::vector<std::string> command, pollfd client_fd
         return;
     }
 
-    auto it = command_table.find(command[0]); //find command string (PING, ECHO, etc.)
+    //redis is case-insensitive so convert to uppercase
+    std::string cmd_upper = command[0];
+    std::transform(cmd_upper.begin(), cmd_upper.end(), cmd_upper.begin(), ::toupper);
+
+
+    auto it = command_table.find(cmd_upper); //find command string (PING, ECHO, etc.)
     if (it != command_table.end()) {
         it->second(command, client_fd.fd); //go to corresponding command function
     } else {
