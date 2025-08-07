@@ -14,7 +14,7 @@
 #include <unordered_map>
 #include <functional>
 
-#include "RESP_Parser.h"
+#include "Protocol.h"
 /*
 #ifdef _WIN32
 #include <io.h>
@@ -32,20 +32,7 @@
 #include <netdb.h>
 #endif */
 
-//Command handlers:
-void handle_ping(const std::vector<std::string> & cmd, int fd) {
-  std::string response = "+PONG\r\n";
-  send(fd, response.c_str(), response.size(), 0);
-}
 
-void handle_echo(const std::vector<std::string>& cmd, int fd) {
-
-}
-
-std::unordered_map<std::string, std::function<void(const std::vector<std::string>&, int)>> command_table = {
-  {"PING", handle_ping},
-  {"ECHO", handle_echo}
-};
 
 
 int main(int argc, char **argv) {
@@ -95,6 +82,8 @@ int main(int argc, char **argv) {
   
   //Implimenting multiple client support
   std::vector<pollfd> poll_fds; //file descriptors vector
+
+  Protocol protocol;
   
   /*
   self note:
@@ -131,27 +120,17 @@ int main(int argc, char **argv) {
          std::cerr << "failed to read bytes by user\n";
          close(poll_fds[i].fd);
          poll_fds.erase(poll_fds.begin() + i);
-        } else {   
-        
-        //handle client ocmmands
+        } else {  
+        //handle client commands
         std::string request(buffer);
-        RESP_Parser parser;
-        std::vector<std::string> command = parser.parse(request); //note: impliment parse
-        //handle_command(command, poll_fds[i].fd); //handle the command
-        auto it = command_table.find(command[0]);
-        if (it != command_table.end()) {
-          it->second(command, poll_fds[i].fd);
-        } else {
-            // handle unknown command
-            std::string response = "-ERR unknown command\r\n";
-            send(poll_fds[i].fd, response.c_str(), response.size(), 0);
-        }
+        std::vector<std::string> command = protocol.parse(request); //note: impliment parse (will return a parsed command which is an array of bulk strings encoded with the redis protocol)
+        protocol.executeCommand(command, poll_fds[i]);
 
-
+        /*
         if (request.find("PING") != std::string::npos) { //note to self: if not find .find returns string::npos
           std::string response = "+PONG\r\n";
           send(poll_fds[i].fd, response.c_str(), response.size(), 0);
-        }
+        }*/
        }
       } 
     }

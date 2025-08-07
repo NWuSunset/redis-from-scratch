@@ -3,6 +3,11 @@
 
 #include <vector>
 #include <string>
+#include <unordered_map>
+#include <sys/socket.h>
+#include <functional>
+#include <poll.h>
+#include <iostream>
 
 class Protocol
 {
@@ -12,17 +17,12 @@ public:
     Protocol(/* args */);
 
     std::vector<std::string> parse(std::string);
+    void executeCommand(std::vector<std::string> command, pollfd client_fd);
 
     ~Protocol();
 };
 
-Protocol::Protocol(/* args */)
-{
-}
 
-Protocol::~Protocol()
-{
-}
 
 
 
