@@ -1,5 +1,10 @@
 #include "Protocol.h"
 
+bool iequals(const std::string& a, const std::string& b) { //checks if stings are equal, reguarless of capitalization 
+    return std::equal(a.begin(), a.end(), b.begin(), b.end(),
+        [](char a, char b) { return tolower(a) == tolower(b); });
+}
+
 Protocol::Protocol()
 {
     command_table = {
@@ -55,10 +60,8 @@ void Protocol::handle_set(const std::vector<std::string>& cmd, int fd) {
 
     std::string key = cmd[1];
     std::string value = cmd[2];
-    std::cout << cmd[3] << std::endl;
 
-    if (cmd.size() >= 5 && cmd[3] == "PX") {
-        std::cout << "PX args used" << std::endl;
+    if (cmd.size() >= 5 && iequals(cmd[3], "PX")) {
         int px_value = std::stoi(cmd[4]);
         //set expiry (set time + expiry time). When expiry happens the current time will be greater than this value 
         expiry_store[key] = std::chrono::steady_clock::now() + std::chrono::milliseconds(px_value);
@@ -81,7 +84,6 @@ void Protocol::handle_get(const std::vector<std::string>& cmd, int fd) {
     auto kv_it = kv_store.find(key);
     //If passed expiry (current time > time when key was set + expiry time)
     if (exp_it != expiry_store.end() && std::chrono::steady_clock::now() > exp_it->second) {
-        std::cout << "EXPIRED" << std::endl;
         kv_store.erase(kv_it);
         expiry_store.erase(exp_it);
         kv_it = kv_store.find(key);
@@ -146,7 +148,7 @@ void Protocol::executeCommand(std::vector<std::string> command, pollfd client_fd
 
     //redis is case-insensitive so convert to uppercase
     std::string cmd_upper = command[0];
-    std::transform(cmd_upper.begin(), cmd_upper.end(), cmd_upper.begin(), ::toupper); //!! note that the entire command will become uppercase, check if this is a problem later?
+    std::transform(cmd_upper.begin(), cmd_upper.end(), cmd_upper.begin(), ::toupper); 
 
 
     auto it = command_table.find(cmd_upper); //find command string (PING, ECHO, etc.)
@@ -157,6 +159,8 @@ void Protocol::executeCommand(std::vector<std::string> command, pollfd client_fd
         send(client_fd.fd, response.c_str(), response.size(), 0);
     } 
 }
+
+
 
 Protocol::~Protocol()
 {
