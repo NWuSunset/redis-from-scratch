@@ -81,6 +81,7 @@ void Protocol::handle_get(const std::vector<std::string>& cmd, int fd) {
     if (exp_it != expiry_store.end() && std::chrono::steady_clock::now() > exp_it->second) {
         kv_store.erase(kv_it);
         expiry_store.erase(exp_it);
+        kv_it = kv_store.find(key);
     }
 
     
