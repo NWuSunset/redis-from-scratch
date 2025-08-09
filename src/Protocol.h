@@ -8,12 +8,14 @@
 #include <functional>
 #include <poll.h>
 #include <iostream>
+#include <chrono>
 
 class Protocol
 {
 private:
     std::unordered_map<std::string, std::string> kv_store; //key value store for SET and GET
     std::unordered_map<std::string, std::function<void(const std::vector<std::string>&, int)>> command_table;
+    std::unordered_map<std::string, std::chrono::steady_clock::time_point> expiry_store; //stores expiry time for keys
     
 public:
     Protocol(/* args */);

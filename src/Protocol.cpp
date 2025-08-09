@@ -24,19 +24,45 @@ void Protocol::handle_echo(const std::vector<std::string>& cmd, int fd) {
     return;
   }
 
+ 
+
   const std::string& arg = cmd[1];
   std::string response = "$" + std::to_string(arg.length()) + "\r\n" + arg + "\r\n";
   send(fd, response.c_str(), response.size(), 0);
 }
 
-//sets a key to a value (like a map) ex: SET foo bar, where 'foo' is the key to value 'bar'
+//sets a key to a value
+
+/* Note: when adding keys with experation times:
+
+Redis keys are expired in two ways: a passive way and an active way.
+
+A key is passively expired when a client tries to access it and the key is timed out.
+
+However, this is not enough as there are expired keys that will never be accessed again. 
+These keys should be expired anyway, so periodically, Redis tests a few keys at random amongst the set of keys with an expiration. 
+All the keys that are already expired are deleted from the keyspace.
+
+Active expiry will not be included at this time.
+
+*/
 void Protocol::handle_set(const std::vector<std::string>& cmd, int fd) {
     if (cmd.size() < 3) {
         std::string response = "-ERR wrong number of arguments for 'set' command\r\n";
         send(fd, response.c_str(), response.size(), 0);
         return;
     }
-    kv_store[cmd[1]] = cmd[2]; //link the key to the value
+
+    std::string key = cmd[1];
+    std::string value = cmd[2];
+
+    if (cmd.size() >= 5 && cmd[3] == "PX") {
+        int px_value = std::stoi(cmd[4]);
+        //set expiry (set time + expiry time). When expiry happens the current time will be greater than this value 
+        expiry_store[key] = std::chrono::steady_clock::now() + std::chrono::milliseconds(px_value);
+    } 
+
+    kv_store[key] = value; //link the key to the value
     std::string response = "+OK\r\n";
     send(fd, response.c_str(), response.size(), 0);
 }
@@ -48,9 +74,18 @@ void Protocol::handle_get(const std::vector<std::string>& cmd, int fd) {
          send(fd, response.c_str(), response.size(), 0);
          return;
     }
-    auto it = kv_store.find(cmd[1]);
-    if (it != kv_store.end()) {
-        std::string value = it->second;
+    std::string key = cmd[1];
+    auto exp_it = expiry_store.find(key);
+    auto kv_it = kv_store.find(key);
+    //If passed expiry (current time > time when key was set + expiry time)
+    if (exp_it != expiry_store.end() && std::chrono::steady_clock::now() > exp_it->second) {
+        kv_store.erase(kv_it);
+        expiry_store.erase(exp_it);
+    }
+
+    
+    if (kv_it != kv_store.end()) {
+        std::string value = kv_it->second;
         std::string response = "$" + std::to_string(value.length()) + "\r\n" + value + "\r\n";
         send(fd, response.c_str(), response.size(), 0);
     } else {
@@ -107,7 +142,7 @@ void Protocol::executeCommand(std::vector<std::string> command, pollfd client_fd
 
     //redis is case-insensitive so convert to uppercase
     std::string cmd_upper = command[0];
-    std::transform(cmd_upper.begin(), cmd_upper.end(), cmd_upper.begin(), ::toupper);
+    std::transform(cmd_upper.begin(), cmd_upper.end(), cmd_upper.begin(), ::toupper); //!! note that the entire command will become uppercase, check if this is a problem later?
 
 
     auto it = command_table.find(cmd_upper); //find command string (PING, ECHO, etc.)
