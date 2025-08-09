@@ -88,6 +88,7 @@ void Protocol::handle_get(const std::vector<std::string>& cmd, int fd) {
     if (kv_it != kv_store.end()) {
         std::string value = kv_it->second;
         std::string response = "$" + std::to_string(value.length()) + "\r\n" + value + "\r\n";
+        std::cout << response << std::endl;
         send(fd, response.c_str(), response.size(), 0);
     } else {
         std::string response = "$-1\r\n"; //return a null bulk string
