@@ -55,8 +55,10 @@ void Protocol::handle_set(const std::vector<std::string>& cmd, int fd) {
 
     std::string key = cmd[1];
     std::string value = cmd[2];
+    std::cout << cmd[3] << std::endl;
 
     if (cmd.size() >= 5 && cmd[3] == "PX") {
+        std::cout << "PX args used" << std::endl;
         int px_value = std::stoi(cmd[4]);
         //set expiry (set time + expiry time). When expiry happens the current time will be greater than this value 
         expiry_store[key] = std::chrono::steady_clock::now() + std::chrono::milliseconds(px_value);
@@ -76,13 +78,16 @@ void Protocol::handle_get(const std::vector<std::string>& cmd, int fd) {
     }
     std::string key = cmd[1];
     auto exp_it = expiry_store.find(key);
+    auto kv_it = kv_store.find(key);
     //If passed expiry (current time > time when key was set + expiry time)
     if (exp_it != expiry_store.end() && std::chrono::steady_clock::now() > exp_it->second) {
-        kv_store.erase(key);
-        expiry_store.erase(key);
+        std::cout << "EXPIRED" << std::endl;
+        kv_store.erase(kv_it);
+        expiry_store.erase(exp_it);
+        kv_it = kv_store.find(key);
     }
 
-    auto kv_it = kv_store.find(key);
+    
     if (kv_it != kv_store.end()) {
         std::string value = kv_it->second;
         std::string response = "$" + std::to_string(value.length()) + "\r\n" + value + "\r\n";
